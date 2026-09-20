@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 from google import genai
+from timeutils import now_wib
 
 load_dotenv()
 
@@ -19,7 +20,7 @@ def _cari_hashtag_kategori(text: str) -> str | None:
     return kata.title()
 
 def extract_task(user_message: str, existing_categories: list[str] = None) -> dict:
-    now = datetime.now()
+    now = now_wib()
     existing_categories = existing_categories or []
     daftar_kategori_str = ", ".join(existing_categories) if existing_categories else "(belum ada)"
 
@@ -56,7 +57,7 @@ Pesan: "{user_message}"
     return hasil
 
 def extract_edit(current_task: dict, instruksi: str, existing_categories: list[str] = None) -> dict:
-    now = datetime.now()
+    now = now_wib()
     existing_categories = existing_categories or []
     daftar_kategori_str = ", ".join(existing_categories) if existing_categories else "(belum ada)"
 

@@ -12,6 +12,8 @@ from extractor import extract_edit, extract_task
 from scheduler import start_scheduler
 from telegram import BotCommand
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from timeutils import now_wib
+from reminder_ui import build_grouped_message
 
 
 load_dotenv()
@@ -190,8 +192,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         jam_int = int(jam)
-        target = datetime.now().replace(hour=jam_int, minute=0, second=0, microsecond=0)
-        if target < datetime.now():
+        target = now_wib().replace(hour=jam_int, minute=0, second=0, microsecond=0)
+        if target < now_wib():
             target += timedelta(days=1)
 
         db.update_task(task_id, chat_id, due_at=target.isoformat())
@@ -205,11 +207,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.mark_done(task_id, chat_id)
         await query.edit_message_text(f"✅ Task #{task_id} ditandai selesai.")
     elif action == "snooze1h":
-        new_due = (datetime.now() + timedelta(hours=1)).isoformat()
+        new_due = (now_wib() + timedelta(hours=1)).isoformat()
         db.update_task(task_id, chat_id, due_at=new_due)
         await query.edit_message_text(f"⏰ Task #{task_id} ditunda 1 jam.")
     elif action == "snoozetomorrow":
-        besok = (datetime.now() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+        besok = (now_wib() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
         db.update_task(task_id, chat_id, due_at=besok.isoformat())
         await query.edit_message_text(f"📅 Task #{task_id} ditunda ke besok jam 09:00.")
     
@@ -287,7 +289,7 @@ async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_document(
         document=open(db.DB_PATH, "rb"),
         filename="tasks_backup.db",
-        caption=f"📦 Backup database — {datetime.now().strftime('%d %b %Y %H:%M')}"
+        caption=f"📦 Backup database — {now_wib().strftime('%d %b %Y %H:%M')}"
     )
 
 
