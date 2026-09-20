@@ -12,18 +12,27 @@ import db
 from extractor import extract_edit, extract_task
 from scheduler import start_scheduler
 from telegram import BotCommand
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 
 
 load_dotenv()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Halo! Kirim tugas dengan bahasa santai, contoh:\n"
+        "Halo! Aku Tastant asisten tugas harian kamu, Kirim tugas yang harus kamu kerjakan dengan bahasa santai, nanti aku rekap in 👍🙌 contoh:\n"
         "\"Ingetin follow up laporan besok jam 9\"\n\n"
-        "Perintah lain:\n"
-        "/list - lihat tugas pending\n"
+        "Kalau tidak sebut jam, saya akan tawarkan pilihan waktu reminder.\n\n"
+        "📋 Lihat tugas:\n"
+        "/today - tugas hari ini + overdue\n"
+        "/list - semua tugas pending\n"
+        "/overdue - khusus yang terlewat\n\n"
+        "✏️ Kelola tugas:\n"
         "/done <id> - tandai selesai\n"
-        "/delete <id> - hapus tugas"
+        "/edit <id> <perubahan> - revisi tugas\n"
+        "/delete <id> - hapus tugas\n\n"
+        "🔧 Lainnya:\n"
+        "/backup - kirim file database\n"
+        "/reset_db - reset database (perlu konfirmasi)"
     )
 
 
@@ -34,31 +43,38 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         hasil = extract_task(pesan_user)
     except RuntimeError:
-        await update.message.reply_text(
-            "⚠️ Lagi kena batas pemakaian gratis API sesaat. Coba kirim ulang dalam beberapa detik."
-        )
+        await update.message.reply_text("⚠️ Lagi kena batas API, coba lagi sebentar.")
         return
 
     if not hasil.get("description") or not hasil["description"].strip():
         await update.message.reply_text(
-            "Hmm, saya tidak menangkap tugas apa pun dari pesan itu. "
-            "Coba jelaskan lebih detail, misal: \"follow up laporan besok jam 10\"."
+            "Hmm, saya tidak menangkap tugas apa pun dari pesan itu. Coba jelaskan lebih detail."
         )
         return
-    task_id = db.add_task(
-        chat_id=chat_id,
-        description=hasil["description"],
-        due_at=hasil["due_at"],
-        priority=hasil["priority"],
-    )
 
     if hasil["due_at"]:
+        # Ada waktu spesifik dari NLP, langsung simpan seperti biasa
+        task_id = db.add_task(chat_id, hasil["description"], hasil["due_at"], hasil["priority"])
         waktu = datetime.fromisoformat(hasil["due_at"]).strftime("%a, %d %b %Y %H:%M")
-        balasan = f"✅ Tersimpan #{task_id}: {hasil['description']}\n⏰ {waktu}"
-    else:
-        balasan = f"✅ Tersimpan #{task_id}: {hasil['description']} (tanpa waktu spesifik)"
+        await update.message.reply_text(f"✅ Tersimpan #{task_id}: {hasil['description']}\n⏰ {waktu}")
+        return
 
-    await update.message.reply_text(balasan)
+    # Tidak ada waktu spesifik -> simpan dulu tanpa due_at, lalu tawarkan pilihan
+    task_id = db.add_task(chat_id, hasil["description"], None, hasil["priority"])
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🌅 08:00", callback_data=f"settime:{task_id}:08:00"),
+            InlineKeyboardButton("☀️ 12:00", callback_data=f"settime:{task_id}:12:00"),
+            InlineKeyboardButton("🌇 15:00", callback_data=f"settime:{task_id}:15:00"),
+        ],
+        [InlineKeyboardButton("🔕 Tanpa reminder", callback_data=f"settime:{task_id}:none")],
+    ])
+    await update.message.reply_text(
+        f"✅ Tersimpan #{task_id}: {hasil['description']}\n"
+        f"Tidak ada waktu spesifik — mau diingatkan kapan?",
+        reply_markup=keyboard
+    )
 
 
 async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -112,10 +128,15 @@ async def delete_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def post_init(application: Application):
     await application.bot.set_my_commands([
+        BotCommand("start", "Info cara pakai bot"),
         BotCommand("list", "Lihat tugas yang belum selesai"),
+        BotCommand("today", "Tugas hari ini + yang overdue"),
+        BotCommand("overdue", "Khusus tugas yang terlewat"),
         BotCommand("done", "Tandai tugas selesai, contoh /done 3"),
         BotCommand("delete", "Hapus tugas, contoh /delete 3"),
-        BotCommand("start", "Info cara pakai bot"),
+        BotCommand("edit", "Revisi tugas, contoh /edit 3 majukan jam 2"),
+        BotCommand("backup", "Kirim file backup database"),
+        BotCommand("reset_db", "Buat Database Fresh Kembali"),
     ])
     start_scheduler(application)
 
@@ -135,8 +156,10 @@ def main():
     app.add_handler(CommandHandler("today", today_cmd, filters=own_chat_filter))
     app.add_handler(CommandHandler("overdue", overdue_cmd, filters=own_chat_filter))
     app.add_handler(CommandHandler("done", done_cmd, filters=own_chat_filter))
-    app.add_handler(CommandHandler("delete", delete_cmd, filters=own_chat_filter))
     app.add_handler(CommandHandler("edit", edit_cmd, filters=own_chat_filter))
+    app.add_handler(CommandHandler("delete", delete_cmd, filters=own_chat_filter))
+    app.add_handler(CommandHandler("backup", backup_cmd, filters=own_chat_filter))
+    app.add_handler(CommandHandler("reset_db", reset_db_cmd, filters=own_chat_filter))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & own_chat_filter, handle_text))
     app.add_handler(CallbackQueryHandler(button_handler)) 
 
@@ -150,17 +173,36 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await query.answer()
 
-    action, data = query.data.split(":")
+    parts = query.data.split(":")
+    action = parts[0]
     chat_id = query.message.chat_id
 
     if action == "doneall":
-        task_ids = [int(x) for x in data.split(",")]
+        task_ids = [int(x) for x in parts[1].split(",")]
         for tid in task_ids:
             db.mark_done(tid, chat_id)
         await query.edit_message_text(f"✅ {len(task_ids)} tugas ditandai selesai sekaligus.")
         return
 
-    task_id = int(data)
+    if action == "settime":
+        task_id = int(parts[1])
+        jam = parts[2]
+
+        if jam == "none":
+            await query.edit_message_text(f"🔕 Task #{task_id} disimpan tanpa reminder.")
+            return
+
+        jam_int = int(jam)
+        target = datetime.now().replace(hour=jam_int, minute=0, second=0, microsecond=0)
+        if target < datetime.now():
+            target += timedelta(days=1)
+
+        db.update_task(task_id, chat_id, due_at=target.isoformat())
+        await query.edit_message_text(f"⏰ Task #{task_id} dijadwalkan {target.strftime('%a %H:%M')}")
+        return
+
+    # Sisa action ("done", "snooze1h", "snoozetomorrow") semuanya formatnya "action:task_id"
+    task_id = int(parts[1])
 
     if action == "done":
         db.mark_done(task_id, chat_id)
@@ -173,6 +215,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         besok = (datetime.now() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
         db.update_task(task_id, chat_id, due_at=besok.isoformat())
         await query.edit_message_text(f"📅 Task #{task_id} ditunda ke besok jam 09:00.")
+    
 
 
 async def edit_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -231,6 +274,31 @@ async def overdue_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     baris = [f"#{t['id']} — {t['description']} (lewat {datetime.fromisoformat(t['due_at']).strftime('%d %b %H:%M')})" for t in tasks]
     await update.message.reply_text("🔴 Tugas terlewat:\n\n" + "\n".join(baris))
+
+async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Kirim file database sebagai dokumen Telegram, semacam backup manual."""
+    if not os.path.exists(db.DB_PATH):
+        await update.message.reply_text("Belum ada database.")
+        return
+    await update.message.reply_document(
+        document=open(db.DB_PATH, "rb"),
+        filename="tasks_backup.db",
+        caption=f"📦 Backup database — {datetime.now().strftime('%d %b %Y %H:%M')}"
+    )
+
+
+async def reset_db_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Hapus SEMUA data, mulai dari kosong lagi. Minta konfirmasi dulu."""
+    if not context.args or context.args[0] != "CONFIRM":
+        await update.message.reply_text(
+            "⚠️ Ini akan menghapus SEMUA data tugas (termasuk riwayat) secara permanen.\n"
+            "Kalau yakin, ketik: /reset_db CONFIRM"
+        )
+        return
+
+    os.remove(db.DB_PATH)
+    db.init_db()
+    await update.message.reply_text("🗑️ Database direset. Mulai dari kosong lagi.")
 
 if __name__ == "__main__":
     main()

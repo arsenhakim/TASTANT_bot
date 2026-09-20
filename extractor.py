@@ -18,7 +18,9 @@ Konteks waktu sekarang: {now.strftime('%Y-%m-%d %H:%M')} ({now.strftime('%A')}).
 
 Dari pesan berikut, ekstrak:
 - description: deskripsi tugas yang ringkas
-- due_at: tanggal & jam dalam format "YYYY-MM-DDTHH:MM:SS", null jika tidak disebutkan
+- due_at: tanggal & jam dalam format "YYYY-MM-DDTHH:MM:SS". PENTING: isi null jika JAM SPESIFIK tidak disebutkan,
+  walaupun tanggal/harinya disebutkan. Contoh: "besok aku harus makan steak" -> due_at: null (karena tidak ada jam
+  yang disebut, meskipun ada kata "besok"). Contoh: "besok jam 7 makan steak" -> due_at diisi tanggal besok jam 07:00.
 - priority: "low", "normal", atau "high"
 
 Balas HANYA JSON, tanpa teks lain, tanpa markdown code fence.

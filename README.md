@@ -14,6 +14,7 @@ Contoh: kirim *"Ingetin follow up laporan besok jam 10"*, bot otomatis menyimpan
 - **`/list`, `/done`, `/delete`** — kelola tugas dasar
 - Riwayat tugas selesai disimpan permanen (tidak dihapus), berguna sebagai dokumentasi kerja
 - Private — bot hanya merespons `chat_id` pemilik, tidak terbuka untuk publik
+- - **Pilihan waktu fleksibel** — kalau pesan tidak menyebut jam spesifik, bot tawarkan tombol pilihan (08:00 / 12:00 / 15:00 / tanpa reminder), bukan menebak sendiri
 
 ## Struktur Project
 TASTANT_bot/
@@ -66,15 +67,19 @@ Buka Telegram, kirim `/start` ke bot kamu.
 
 ## Command yang Tersedia
 
+## Command yang Tersedia
+
 | Command | Fungsi |
 |---|---|
 | `/start` | Info cara pakai bot |
-| `/list` | Semua tugas pending |
 | `/today` | Tugas hari ini + overdue |
+| `/list` | Semua tugas pending |
 | `/overdue` | Khusus tugas yang terlewat |
 | `/done <id>` | Tandai tugas selesai |
-| `/delete <id>` | Hapus tugas |
 | `/edit <id> <perubahan>` | Revisi tugas dengan bahasa natural |
+| `/delete <id>` | Hapus tugas |
+| `/backup` | Kirim file database sebagai dokumen Telegram |
+| `/reset_db CONFIRM` | Hapus semua data, mulai fresh (butuh konfirmasi eksplisit) |
 | *(pesan bebas)* | Otomatis diekstrak jadi tugas baru |
 
 ## Cara Kerja Singkat
