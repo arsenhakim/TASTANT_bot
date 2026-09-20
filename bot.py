@@ -202,18 +202,36 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Sisa action ("done", "snooze1h", "snoozetomorrow") semuanya formatnya "action:task_id"
     task_id = int(parts[1])
+    message_id = query.message.message_id
+    grp_key = f"grp_{message_id}"
 
     if action == "done":
         db.mark_done(task_id, chat_id)
-        await query.edit_message_text(f"✅ Task #{task_id} ditandai selesai.")
+        hasil_teks = f"✅ Task #{task_id} ditandai selesai."
     elif action == "snooze1h":
-        new_due = (now_wib() + timedelta(hours=1)).isoformat()
+        new_due = (datetime.now() + timedelta(hours=1)).isoformat()
         db.update_task(task_id, chat_id, due_at=new_due)
-        await query.edit_message_text(f"⏰ Task #{task_id} ditunda 1 jam.")
+        hasil_teks = f"⏰ Task #{task_id} ditunda 1 jam."
     elif action == "snoozetomorrow":
-        besok = (now_wib() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+        besok = (datetime.now() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
         db.update_task(task_id, chat_id, due_at=besok.isoformat())
-        await query.edit_message_text(f"📅 Task #{task_id} ditunda ke besok jam 09:00.")
+        hasil_teks = f"📅 Task #{task_id} ditunda ke besok jam 09:00."
+    else:
+        return
+
+    if grp_key in context.bot_data:
+        tasks_map = context.bot_data[grp_key]
+        tasks_map.pop(task_id, None)
+
+        if not tasks_map:
+            await query.edit_message_text(f"{hasil_teks}\n\nSemua tugas di reminder ini sudah diproses. ✅")
+            del context.bot_data[grp_key]
+        else:
+            pesan_baru, keyboard_baru = build_grouped_message(tasks_map)
+            await query.edit_message_text(f"{pesan_baru}\n\n({hasil_teks})", reply_markup=keyboard_baru)
+        return
+
+    await query.edit_message_text(hasil_teks)
     
 
 
