@@ -21,27 +21,30 @@ def get_conn():
 
 
 def init_db():
-    with get_conn() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                chat_id INTEGER NOT NULL,
-                description TEXT NOT NULL,
-                due_at TEXT,
-                priority TEXT DEFAULT 'normal',
-                status TEXT DEFAULT 'pending',
-                reminded INTEGER DEFAULT 0,
-                created_at TEXT NOT NULL
-            )
-        """)
-        conn.commit()
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id INTEGER NOT NULL,
+            description TEXT NOT NULL,
+            due_at TEXT,
+            priority TEXT DEFAULT 'normal',
+            category TEXT DEFAULT 'Umum',
+            status TEXT DEFAULT 'pending',
+            reminded INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 
-def add_task(chat_id: int, description: str, due_at: str, priority: str) -> int:
+def add_task(chat_id, description, due_at, priority, category="Umum") -> int:
     with get_conn() as conn:
         cursor = conn.execute(
-            "INSERT INTO tasks (chat_id, description, due_at, priority, created_at) VALUES (?, ?, ?, ?, ?)",
-            (chat_id, description, due_at, priority, datetime.now().isoformat())
+            "INSERT INTO tasks (chat_id, description, due_at, priority, category, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (chat_id, description, due_at, priority, category, datetime.now().isoformat())
         )
         conn.commit()
         return cursor.lastrowid
@@ -91,24 +94,20 @@ def mark_reminded(task_id: int):
         conn.execute("UPDATE tasks SET reminded = 1 WHERE id = ?", (task_id,))
         conn.commit()
 
-def update_task(task_id: int, chat_id: int, description=None, due_at=None, priority=None) -> bool:
+def update_task(task_id, chat_id, description=None, due_at=None, priority=None, category=None) -> bool:
     with get_conn() as conn:
         fields, values = [], []
-
         if description is not None:
-            fields.append("description = ?")
-            values.append(description)
+            fields.append("description = ?"); values.append(description)
         if due_at is not None:
-            fields.append("due_at = ?")
-            values.append(due_at)
-            fields.append("reminded = 0")  # deadline berubah -> reminder harus bisa kekirim lagi
+            fields.append("due_at = ?"); values.append(due_at)
+            fields.append("reminded = 0")
         if priority is not None:
-            fields.append("priority = ?")
-            values.append(priority)
-
+            fields.append("priority = ?"); values.append(priority)
+        if category is not None:
+            fields.append("category = ?"); values.append(category)
         if not fields:
             return False
-
         values.extend([task_id, chat_id])
         query = f"UPDATE tasks SET {', '.join(fields)} WHERE id = ? AND chat_id = ?"
         cursor = conn.execute(query, values)
@@ -127,6 +126,13 @@ def list_today_tasks(chat_id: int):
         ).fetchall()
         return [dict(r) for r in rows]
 
+def get_categories(chat_id: int):
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT category FROM tasks WHERE chat_id = ? ORDER BY category",
+            (chat_id,)
+        ).fetchall()
+        return [r["category"] for r in rows]
 
 def list_overdue_tasks(chat_id: int):
     now_iso = datetime.now().isoformat()
@@ -144,3 +150,12 @@ def get_task(task_id: int, chat_id: int):
             "SELECT * FROM tasks WHERE id = ? AND chat_id = ?", (task_id, chat_id)
         ).fetchone()
         return dict(row) if row else None
+
+def list_pending_tasks_by_category(chat_id: int, category: str):
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM tasks WHERE chat_id = ? AND status = 'pending' AND category = ? "
+            "ORDER BY CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at ASC",
+            (chat_id, category)
+        ).fetchall()
+        return [dict(r) for r in rows]
