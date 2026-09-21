@@ -70,6 +70,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     task_id = db.add_task(chat_id, hasil["description"], None, hasil["priority"], category)
+
+    inferred_date = hasil.get("inferred_date")
+    if inferred_date:
+        context.bot_data[f"pending_date_{task_id}"] = inferred_date
     keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🌅 08:00", callback_data=f"settime:{task_id}:08"),
@@ -195,13 +199,19 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         jam = parts[2]
 
         if jam == "none":
+            context.bot_data.pop(f"pending_date_{task_id}", None)
             await query.edit_message_text(f"🔕 Task #{task_id} disimpan tanpa reminder.")
             return
 
         jam_int = int(jam)
-        target = now_wib().replace(hour=jam_int, minute=0, second=0, microsecond=0)
-        if target < now_wib():
-            target += timedelta(days=1)
+        pending_date = context.bot_data.pop(f"pending_date_{task_id}", None)
+
+        if pending_date:
+            target = datetime.fromisoformat(f"{pending_date}T00:00:00").replace(hour=jam_int)
+        else:
+            target = now_wib().replace(hour=jam_int, minute=0, second=0, microsecond=0)
+            if target < now_wib():
+                target += timedelta(days=1)
 
         db.update_task(task_id, chat_id, due_at=target.isoformat())
         await query.edit_message_text(f"⏰ Task #{task_id} dijadwalkan {target.strftime('%a %H:%M')}")

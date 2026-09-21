@@ -32,11 +32,20 @@ Kategori yang SUDAH PERNAH dipakai user sebelumnya: {daftar_kategori_str}
 
 Dari pesan berikut, ekstrak:
 - description: deskripsi tugas yang ringkas (buang hashtag dari deskripsi kalau ada)
-- due_at: format "YYYY-MM-DDTHH:MM:SS", null jika jam spesifik tidak disebutkan
-- Jika user menyebut pola "besok <nama hari>" (misal "besok minggu", "besok senin", "besok kamis"),
-  ini artinya HARI ITU YANG AKAN DATANG BERIKUTNYA, BUKAN otomatis tanggal besok (+1 hari). Hitung dari
-  konteks waktu sekarang, cari kemunculan nama hari itu paling dekat ke depan. Contoh: kalau hari ini
-  Senin 21 September 2026, maka "besok minggu" = Minggu 27 September 2026 (6 hari lagi), BUKAN 22 September.
+- due_at: format "YYYY-MM-DDTHH:MM:SS". WAJIB isi null jika JAM SPESIFIK (misal "jam 9", "jam 3 sore",
+  "sebelum jam 15:00") TIDAK disebutkan sama sekali di pesan — walaupun ada kata hari/tanggal seperti
+  "besok", "besok minggu", "lusa", dst. Contoh: "besok saya ketemuan sama klien" -> due_at: null (karena
+  tidak ada jam yang disebut, meski ada kata "besok").
+  Jika jam DISEBUTKAN, baru isi due_at sesuai tanggal & jam tersebut. Untuk pola "besok <nama hari>"
+  (misal "besok minggu jam 3 sore"), "besok <nama hari>" artinya HARI ITU YANG AKAN DATANG BERIKUTNYA
+  (bukan otomatis +1 hari) — cari kemunculan nama hari itu yang paling dekat ke depan dari waktu sekarang.
+  Contoh: hari ini Senin 21 September 2026, "besok minggu jam 3 sore" -> Minggu 27 September 2026, 15:00.
+- inferred_date: format "YYYY-MM-DD", null jika benar-benar tidak ada petunjuk tanggal/hari apa pun di
+  pesan. WAJIB diisi (walau due_at null karena jam tidak disebutkan) jika ada petunjuk tanggal/hari
+  apa pun — gunakan LOGIC HARI YANG SAMA PERSIS seperti due_at (termasuk pola "besok <hari>"), cuma
+  cukup isi tanggalnya saja tanpa perlu jam. Contoh: "besok saya ketemuan klien" (tanpa jam) ->
+  due_at: null, inferred_date: tanggal besok (+1 hari dari sekarang). "besok minggu saya harus beli
+  sesuatu" (tanpa jam) -> due_at: null, inferred_date: tanggal Minggu terdekat ke depan.
 - priority: "low", "normal", atau "high"
 - category: PRIORITASKAN mencocokkan ke salah satu kategori yang SUDAH PERNAH dipakai di atas kalau
   konteksnya jelas berkaitan. Kalau tidak ada yang cocok, isi "Umum". JANGAN membuat nama kategori baru
@@ -85,11 +94,17 @@ Data tugas SAAT INI:
 
 Instruksi perubahan: "{instruksi}"
 
-Tentukan nilai BARU. Field yang tidak disinggung, kembalikan nilai LAMA apa adanya. Waktu relatif dihitung
-dari due_at SAAT INI, bukan dari sekarang. Jika user menyebut pola "besok <nama hari>" (misal "besok minggu", "besok senin", "besok kamis"),
-ini artinya HARI ITU YANG AKAN DATANG BERIKUTNYA, BUKAN otomatis tanggal besok (+1 hari). Hitung dari
-konteks waktu sekarang, cari kemunculan nama hari itu paling dekat ke depan. Contoh: kalau hari ini
-Senin 21 September 2026, maka "besok minggu" = Minggu 27 September 2026 (6 hari lagi), BUKAN 22 September.
+Tentukan nilai BARU. Field yang tidak disinggung, kembalikan nilai LAMA apa adanya. Waktu relatif
+(seperti "besok", "minggu depan") dihitung dari due_at SAAT INI, bukan dari waktu sekarang.
+
+WAJIB isi due_at null HANYA jika instruksi secara eksplisit menghapus waktu (misal "hapus waktunya",
+"jadi tanpa deadline") — jika instruksi tidak menyinggung waktu sama sekali, kembalikan due_at LAMA
+apa adanya, JANGAN diubah jadi null.
+
+Jika instruksi menyebut jam baru, sertakan tanggal & jam barunya. Untuk pola "besok <nama hari>"
+(misal "besok minggu jam 3 sore"), "besok <nama hari>" artinya HARI ITU YANG AKAN DATANG BERIKUTNYA
+(bukan otomatis +1 hari) — cari kemunculan nama hari itu yang paling dekat ke depan dari due_at SAAT INI.
+Contoh: due_at saat ini Senin 21 September 2026, "besok minggu jam 3 sore" -> Minggu 27 September 2026, 15:00.
 
 Balas HANYA JSON:
 {{"description": "...", "due_at": "..." atau null, "priority": "low|normal|high", "category": "..."}}
