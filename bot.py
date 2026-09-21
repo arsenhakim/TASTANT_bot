@@ -209,11 +209,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.mark_done(task_id, chat_id)
         hasil_teks = f"✅ Task #{task_id} ditandai selesai."
     elif action == "snooze1h":
-        new_due = (datetime.now() + timedelta(hours=1)).isoformat()
+        new_due = (now_wib() + timedelta(hours=1)).isoformat()
         db.update_task(task_id, chat_id, due_at=new_due)
         hasil_teks = f"⏰ Task #{task_id} ditunda 1 jam."
     elif action == "snoozetomorrow":
-        besok = (datetime.now() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+        besok = (now_wib() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
         db.update_task(task_id, chat_id, due_at=besok.isoformat())
         hasil_teks = f"📅 Task #{task_id} ditunda ke besok jam 09:00."
     else:

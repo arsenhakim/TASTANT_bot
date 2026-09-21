@@ -44,7 +44,7 @@ def add_task(chat_id, description, due_at, priority, category="Umum") -> int:
         cursor = conn.execute(
             "INSERT INTO tasks (chat_id, description, due_at, priority, category, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (chat_id, description, due_at, priority, category, datetime.now().isoformat())
+            (chat_id, description, due_at, priority, category, now_wib().isoformat())
         )
         conn.commit()
         return cursor.lastrowid
@@ -117,7 +117,7 @@ def update_task(task_id, chat_id, description=None, due_at=None, priority=None, 
 
 def list_today_tasks(chat_id: int):
     """Tugas hari ini + semua yang overdue (belum selesai)."""
-    besok_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    besok_str = (now_wib() + timedelta(days=1)).strftime("%Y-%m-%d")
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM tasks WHERE chat_id = ? AND status = 'pending' "
@@ -135,7 +135,7 @@ def get_categories(chat_id: int):
         return [r["category"] for r in rows]
 
 def list_overdue_tasks(chat_id: int):
-    now_iso = datetime.now().isoformat()
+    now_iso = now_wib().isoformat()
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM tasks WHERE chat_id = ? AND status = 'pending' "

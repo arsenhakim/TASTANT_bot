@@ -8,7 +8,7 @@ from reminder_ui import build_single_keyboard, build_grouped_message
 
 
 async def cek_reminder(app: Application):
-    now_iso = datetime.now().isoformat()
+    now_iso = now_wib().isoformat()
     tasks_jatuh_tempo = db.get_due_unreminded_tasks(now_iso)
     if not tasks_jatuh_tempo:
         return
