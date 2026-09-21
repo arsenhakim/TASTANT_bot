@@ -33,6 +33,10 @@ Kategori yang SUDAH PERNAH dipakai user sebelumnya: {daftar_kategori_str}
 Dari pesan berikut, ekstrak:
 - description: deskripsi tugas yang ringkas (buang hashtag dari deskripsi kalau ada)
 - due_at: format "YYYY-MM-DDTHH:MM:SS", null jika jam spesifik tidak disebutkan
+- Jika user menyebut pola "besok <nama hari>" (misal "besok minggu", "besok senin", "besok kamis"),
+  ini artinya HARI ITU YANG AKAN DATANG BERIKUTNYA, BUKAN otomatis tanggal besok (+1 hari). Hitung dari
+  konteks waktu sekarang, cari kemunculan nama hari itu paling dekat ke depan. Contoh: kalau hari ini
+  Senin 21 September 2026, maka "besok minggu" = Minggu 27 September 2026 (6 hari lagi), BUKAN 22 September.
 - priority: "low", "normal", atau "high"
 - category: PRIORITASKAN mencocokkan ke salah satu kategori yang SUDAH PERNAH dipakai di atas kalau
   konteksnya jelas berkaitan. Kalau tidak ada yang cocok, isi "Umum". JANGAN membuat nama kategori baru
@@ -82,7 +86,10 @@ Data tugas SAAT INI:
 Instruksi perubahan: "{instruksi}"
 
 Tentukan nilai BARU. Field yang tidak disinggung, kembalikan nilai LAMA apa adanya. Waktu relatif dihitung
-dari due_at SAAT INI, bukan dari sekarang.
+dari due_at SAAT INI, bukan dari sekarang. Jika user menyebut pola "besok <nama hari>" (misal "besok minggu", "besok senin", "besok kamis"),
+ini artinya HARI ITU YANG AKAN DATANG BERIKUTNYA, BUKAN otomatis tanggal besok (+1 hari). Hitung dari
+konteks waktu sekarang, cari kemunculan nama hari itu paling dekat ke depan. Contoh: kalau hari ini
+Senin 21 September 2026, maka "besok minggu" = Minggu 27 September 2026 (6 hari lagi), BUKAN 22 September.
 
 Balas HANYA JSON:
 {{"description": "...", "due_at": "..." atau null, "priority": "low|normal|high", "category": "..."}}
