@@ -1,6 +1,7 @@
 import os
 import json
 import sqlite3
+import asyncio
 from datetime import datetime
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -43,9 +44,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     existing_categories = db.get_categories(chat_id)
 
     try:
-        hasil = extract_task(pesan_user, existing_categories)
-    except RuntimeError:
-        await update.message.reply_text("⚠️ Lagi kena batas API, coba lagi sebentar.")
+        hasil = await asyncio.to_thread(extract_task, pesan_user, existing_categories)
+    except RuntimeError as e:
+        if str(e) == "json_error":
+            await update.message.reply_text(
+                "⚠️ AI kesulitan memformat jawabannya untuk kalimat itu. Coba tulis lebih sederhana, "
+                "atau kirim ulang sekali lagi (kadang cuma perlu dicoba ulang)."
+            )
+        else:
+            await update.message.reply_text("⚠️ Gagal menghubungi Gemini API, coba lagi sebentar.")
         return
 
     if not hasil.get("description") or not hasil["description"].strip():
@@ -254,9 +261,12 @@ async def edit_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     instruksi = " ".join(context.args[1:])
     existing_categories = db.get_categories(chat_id)
     try:
-        hasil = extract_edit(current_task, instruksi, existing_categories)
-    except RuntimeError:
-        await update.message.reply_text("⚠️ Lagi kena batas API, coba lagi sebentar.")
+        hasil = await asyncio.to_thread(extract_edit, current_task, instruksi, existing_categories)
+    except RuntimeError as e:
+        if str(e) == "json_error":
+            await update.message.reply_text("⚠️ AI kesulitan memformat jawabannya. Coba kirim ulang.")
+        else:
+            await update.message.reply_text("⚠️ Gagal menghubungi Gemini API, coba lagi sebentar.")
         return
 
     db.update_task(

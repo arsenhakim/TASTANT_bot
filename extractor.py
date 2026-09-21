@@ -43,12 +43,18 @@ Balas HANYA JSON, tanpa teks lain.
 Pesan: "{user_message}"
 """
     try:
-        interaction = client.interactions.create(model="gemini-3.6-flash", input=prompt)
+        interaction = client.interactions.create(model="gemini-3.1-flash-lite", input=prompt)
     except Exception as e:
-        raise RuntimeError(f"Gagal menghubungi Gemini API: {e}") from e
+        print(f"[EXTRACT_TASK ERROR] {type(e).__name__}: {e}")
+        raise RuntimeError("api_error") from e
 
     raw = interaction.output_text.strip().replace("```json", "").replace("```", "").strip()
-    hasil = json.loads(raw)
+
+    try:
+        hasil = json.loads(raw)
+    except json.JSONDecodeError as e:
+        print(f"[EXTRACT_TASK JSON ERROR] Gagal parse. Raw response Gemini:\n---\n{raw}\n---")
+        raise RuntimeError("json_error") from e
 
     hashtag_kategori = _cari_hashtag_kategori(user_message)
     if hashtag_kategori:
@@ -82,12 +88,18 @@ Balas HANYA JSON:
 {{"description": "...", "due_at": "..." atau null, "priority": "low|normal|high", "category": "..."}}
 """
     try:
-        interaction = client.interactions.create(model="gemini-3.6-flash", input=prompt)
+        interaction = client.interactions.create(model="gemini-3.1-flash-lite", input=prompt)
     except Exception as e:
-        raise RuntimeError(f"Gagal menghubungi Gemini API: {e}") from e
+        print(f"[EXTRACT_EDIT ERROR] {type(e).__name__}: {e}")
+        raise RuntimeError("api_error") from e
 
     raw = interaction.output_text.strip().replace("```json", "").replace("```", "").strip()
-    hasil = json.loads(raw)
+
+    try:
+        hasil = json.loads(raw)
+    except json.JSONDecodeError as e:
+        print(f"[EXTRACT_EDIT JSON ERROR] Gagal parse. Raw response Gemini:\n---\n{raw}\n---")
+        raise RuntimeError("json_error") from e
 
     hashtag_kategori = _cari_hashtag_kategori(instruksi)
     if hashtag_kategori:
