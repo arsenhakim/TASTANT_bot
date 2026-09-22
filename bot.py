@@ -44,49 +44,71 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     existing_categories = db.get_categories(chat_id)
 
     try:
-        hasil = await asyncio.to_thread(extract_task, pesan_user, existing_categories)
+        daftar_hasil = await asyncio.to_thread(extract_task, pesan_user, existing_categories)
     except RuntimeError as e:
         if str(e) == "json_error":
-            await update.message.reply_text(
-                "⚠️ AI kesulitan memformat jawabannya untuk kalimat itu. Coba tulis lebih sederhana, "
-                "atau kirim ulang sekali lagi (kadang cuma perlu dicoba ulang)."
-            )
+            await update.message.reply_text("⚠️ AI kesulitan memformat jawabannya. Coba kirim ulang.")
         else:
             await update.message.reply_text("⚠️ Gagal menghubungi Gemini API, coba lagi sebentar.")
         return
 
-    if not hasil.get("description") or not hasil["description"].strip():
+    if not isinstance(daftar_hasil, list) or not daftar_hasil:
         await update.message.reply_text("Hmm, saya tidak menangkap tugas apa pun dari pesan itu.")
         return
 
-    category = hasil.get("category", "Umum")
+    # Kasus paling umum: cuma 1 tugas -> alur sama persis seperti sebelumnya (dengan tombol jam)
+    if len(daftar_hasil) == 1:
+        hasil = daftar_hasil[0]
+        if not hasil.get("description") or not hasil["description"].strip():
+            await update.message.reply_text("Hmm, saya tidak menangkap tugas apa pun dari pesan itu.")
+            return
 
-    if hasil["due_at"]:
-        task_id = db.add_task(chat_id, hasil["description"], hasil["due_at"], hasil["priority"], category)
-        waktu = datetime.fromisoformat(hasil["due_at"]).strftime("%a, %d %b %Y %H:%M")
+        category = hasil.get("category", "Umum")
+        if hasil["due_at"]:
+            task_id = db.add_task(chat_id, hasil["description"], hasil["due_at"], hasil["priority"], category)
+            waktu = datetime.fromisoformat(hasil["due_at"]).strftime("%a, %d %b %Y %H:%M")
+            await update.message.reply_text(f"✅ Tersimpan #{task_id}: {hasil['description']}\n🏷️ {category}\n⏰ {waktu}")
+            return
+
+        task_id = db.add_task(chat_id, hasil["description"], None, hasil["priority"], category)
+        inferred_date = hasil.get("inferred_date")
+        if inferred_date:
+            context.bot_data[f"pending_date_{task_id}"] = inferred_date
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("🌅 08:00", callback_data=f"settime:{task_id}:08"),
+                InlineKeyboardButton("☀️ 12:00", callback_data=f"settime:{task_id}:12"),
+                InlineKeyboardButton("🌇 15:00", callback_data=f"settime:{task_id}:15"),
+            ],
+            [InlineKeyboardButton("🔕 Tanpa reminder", callback_data=f"settime:{task_id}:none")],
+        ])
         await update.message.reply_text(
-            f"✅ Tersimpan #{task_id}: {hasil['description']}\n🏷️ {category}\n⏰ {waktu}"
+            f"✅ Tersimpan #{task_id}: {hasil['description']}\n🏷️ {category}\nTidak ada waktu spesifik — mau diingatkan kapan?",
+            reply_markup=keyboard
         )
         return
 
-    task_id = db.add_task(chat_id, hasil["description"], None, hasil["priority"], category)
+    # Kasus baru: lebih dari 1 tugas dalam 1 pesan -> simpan semua sekaligus
+    baris_konfirmasi = []
+    tanpa_waktu_ids = []
+    for hasil in daftar_hasil:
+        if not hasil.get("description") or not hasil["description"].strip():
+            continue
+        category = hasil.get("category", "Umum")
+        task_id = db.add_task(chat_id, hasil["description"], hasil.get("due_at"), hasil.get("priority", "normal"), category)
+        if hasil.get("due_at"):
+            waktu = datetime.fromisoformat(hasil["due_at"]).strftime("%d %b %H:%M")
+            baris_konfirmasi.append(f"#{task_id} — {hasil['description']} ({waktu})")
+        else:
+            baris_konfirmasi.append(f"#{task_id} — {hasil['description']} (belum ada waktu)")
+            tanpa_waktu_ids.append(task_id)
 
-    inferred_date = hasil.get("inferred_date")
-    if inferred_date:
-        context.bot_data[f"pending_date_{task_id}"] = inferred_date
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🌅 08:00", callback_data=f"settime:{task_id}:08"),
-            InlineKeyboardButton("☀️ 12:00", callback_data=f"settime:{task_id}:12"),
-            InlineKeyboardButton("🌇 15:00", callback_data=f"settime:{task_id}:15"),
-        ],
-        [InlineKeyboardButton("🔕 Tanpa reminder", callback_data=f"settime:{task_id}:none")],
-    ])
-    await update.message.reply_text(
-        f"✅ Tersimpan #{task_id}: {hasil['description']}\n🏷️ {category}\n"
-        f"Tidak ada waktu spesifik — mau diingatkan kapan?",
-        reply_markup=keyboard
-    )
+    teks = f"✅ {len(baris_konfirmasi)} tugas tersimpan:\n\n" + "\n".join(baris_konfirmasi)
+    if tanpa_waktu_ids:
+        ids_str = ", ".join(f"/edit {i} <waktu>" for i in tanpa_waktu_ids)
+        teks += f"\n\nUntuk atur waktu yang belum ada, pakai: {ids_str}"
+    await update.message.reply_text(teks)
 
 
 async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):

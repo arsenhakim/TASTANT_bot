@@ -51,7 +51,12 @@ Dari pesan berikut, ekstrak:
   konteksnya jelas berkaitan. Kalau tidak ada yang cocok, isi "Umum". JANGAN membuat nama kategori baru
   sendiri kecuali benar-benar jelas dari konteks dan tidak ada opsi lama yang cocok sama sekali.
 
-Balas HANYA JSON, tanpa teks lain.
+PENTING: Jika pesan berisi LEBIH DARI SATU tugas berbeda (dipisah koma, "dan", titik, atau baris baru),
+pecah jadi beberapa tugas terpisah. Balas SELALU dalam bentuk JSON ARRAY — satu object per tugas dengan
+field yang sama seperti di atas (description, due_at, priority, category) — walaupun pesan cuma berisi
+SATU tugas (tetap bungkus jadi array berisi 1 object).
+
+Balas HANYA JSON array, tanpa teks lain, tanpa markdown code fence.
 
 Pesan: "{user_message}"
 """
