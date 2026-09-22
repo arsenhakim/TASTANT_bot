@@ -56,7 +56,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Hmm, saya tidak menangkap tugas apa pun dari pesan itu.")
         return
 
-    # Kasus paling umum: cuma 1 tugas -> alur sama persis seperti sebelumnya (dengan tombol jam)
     if len(daftar_hasil) == 1:
         hasil = daftar_hasil[0]
         if not hasil.get("description") or not hasil["description"].strip():
@@ -70,10 +69,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ Tersimpan #{task_id}: {hasil['description']}\n🏷️ {category}\n⏰ {waktu}")
             return
 
-        task_id = db.add_task(chat_id, hasil["description"], None, hasil["priority"], category)
         inferred_date = hasil.get("inferred_date")
-        if inferred_date:
-            context.bot_data[f"pending_date_{task_id}"] = inferred_date
+        task_id = db.add_task(chat_id, hasil["description"], None, hasil["priority"], category, pending_date=inferred_date)
 
         keyboard = InlineKeyboardMarkup([
             [
@@ -89,14 +86,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Kasus baru: lebih dari 1 tugas dalam 1 pesan -> simpan semua sekaligus
     baris_konfirmasi = []
     tanpa_waktu_ids = []
     for hasil in daftar_hasil:
         if not hasil.get("description") or not hasil["description"].strip():
             continue
         category = hasil.get("category", "Umum")
-        task_id = db.add_task(chat_id, hasil["description"], hasil.get("due_at"), hasil.get("priority", "normal"), category)
+        task_id = db.add_task(
+            chat_id, hasil["description"], hasil.get("due_at"), hasil.get("priority", "normal"),
+            category, pending_date=hasil.get("inferred_date")
+        )
         if hasil.get("due_at"):
             waktu = datetime.fromisoformat(hasil["due_at"]).strftime("%d %b %H:%M")
             baris_konfirmasi.append(f"#{task_id} — {hasil['description']} ({waktu})")
@@ -107,7 +106,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teks = f"✅ {len(baris_konfirmasi)} tugas tersimpan:\n\n" + "\n".join(baris_konfirmasi)
     if tanpa_waktu_ids:
         ids_str = ", ".join(f"/edit {i} <waktu>" for i in tanpa_waktu_ids)
-        teks += f"\n\nUntuk atur waktu yang belum ada, pakai: {ids_str}"
+        teks += f"\n\nUntuk atur waktu yang belum ada, pakai: {ids_str}" 
     await update.message.reply_text(teks)
 
 
@@ -130,7 +129,6 @@ async def done_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Format: /done <id>")
         return
-
     try:
         task_id = int(context.args[0])
     except ValueError:
@@ -159,6 +157,7 @@ async def delete_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"Task #{task_id} tidak ditemukan.")
 
+
 async def post_init(application: Application):
     await application.bot.set_my_commands([
         BotCommand("start", "Info cara pakai bot"),
@@ -174,8 +173,10 @@ async def post_init(application: Application):
     ])
     start_scheduler(application)
 
+
 ALLOWED_CHAT_ID = int(os.environ["ALLOWED_CHAT_ID"])
 own_chat_filter = filters.Chat(chat_id=ALLOWED_CHAT_ID)
+
 
 def main():
     db.init_db()
@@ -193,10 +194,11 @@ def main():
     app.add_handler(CommandHandler("backup", backup_cmd, filters=own_chat_filter))
     app.add_handler(CommandHandler("reset_db", reset_db_cmd, filters=own_chat_filter))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & own_chat_filter, handle_text))
-    app.add_handler(CallbackQueryHandler(button_handler)) 
+    app.add_handler(CallbackQueryHandler(button_handler))
 
     print("Bot jalan...")
     app.run_polling()
+
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -221,12 +223,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         jam = parts[2]
 
         if jam == "none":
-            context.bot_data.pop(f"pending_date_{task_id}", None)
+            db.clear_pending_date(task_id, chat_id)
             await query.edit_message_text(f"🔕 Task #{task_id} disimpan tanpa reminder.")
             return
 
         jam_int = int(jam)
-        pending_date = context.bot_data.pop(f"pending_date_{task_id}", None)
+        task_data = db.get_task(task_id, chat_id)
+        pending_date = task_data.get("pending_date") if task_data else None
 
         if pending_date:
             target = datetime.fromisoformat(f"{pending_date}T00:00:00").replace(hour=jam_int)
@@ -236,10 +239,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 target += timedelta(days=1)
 
         db.update_task(task_id, chat_id, due_at=target.isoformat())
+        db.clear_pending_date(task_id, chat_id)
         await query.edit_message_text(f"⏰ Task #{task_id} dijadwalkan {target.strftime('%a %H:%M')}")
         return
 
-    # Sisa action ("done", "snooze1h", "snoozetomorrow") semuanya formatnya "action:task_id"
     task_id = int(parts[1])
     message_id = query.message.message_id
     grp_key = f"grp_{message_id}"
@@ -271,7 +274,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await query.edit_message_text(hasil_teks)
-    
 
 
 async def edit_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -308,10 +310,13 @@ async def edit_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         priority=hasil.get("priority"),
         category=hasil.get("category"),
     )
+    if hasil.get("due_at"):
+        db.clear_pending_date(task_id, chat_id)
     waktu = datetime.fromisoformat(hasil["due_at"]).strftime("%d %b %H:%M") if hasil.get("due_at") else "(tanpa waktu)"
     await update.message.reply_text(
         f"✏️ Task #{task_id} diperbarui:\n{hasil['description']}\n🏷️ {hasil.get('category', 'Umum')} — {waktu}"
     )
+
 
 def _format_grouped(tasks: list[dict], judul: str) -> str:
     if not tasks:
@@ -330,6 +335,7 @@ def _format_grouped(tasks: list[dict], judul: str) -> str:
             teks += f"{flag} #{t['id']} — {t['description']} ({waktu})\n"
     return teks
 
+
 async def today_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tasks = db.list_today_tasks(update.effective_chat.id)
     teks = _format_grouped(tasks, "📅 Tugas hari ini:")
@@ -341,8 +347,8 @@ async def overdue_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teks = _format_grouped(tasks, "🔴 Tugas terlewat:")
     await update.message.reply_text(teks or "Tidak ada tugas yang terlewat. 👍", parse_mode="Markdown")
 
+
 async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Kirim file database sebagai dokumen Telegram, semacam backup manual."""
     if not os.path.exists(db.DB_PATH):
         await update.message.reply_text("Belum ada database.")
         return
@@ -354,7 +360,6 @@ async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def reset_db_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Hapus SEMUA data, mulai dari kosong lagi. Minta konfirmasi dulu."""
     if not context.args or context.args[0] != "CONFIRM":
         await update.message.reply_text(
             "⚠️ Ini akan menghapus SEMUA data tugas (termasuk riwayat) secara permanen.\n"
@@ -366,6 +371,7 @@ async def reset_db_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.init_db()
     await update.message.reply_text("🗑️ Database direset. Mulai dari kosong lagi.")
 
+
 async def categories_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kategori = db.get_categories(update.effective_chat.id)
     if not kategori:
@@ -374,6 +380,7 @@ async def categories_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teks = "🏷️ Kategori yang sudah ada:\n\n" + "\n".join(f"• {k}" for k in kategori)
     teks += "\n\nKetik /list <nama kategori> untuk filter, contoh: /list Pribadi"
     await update.message.reply_text(teks)
+
 
 if __name__ == "__main__":
     main()

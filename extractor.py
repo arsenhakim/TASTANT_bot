@@ -76,7 +76,8 @@ Pesan: "{user_message}"
 
     hashtag_kategori = _cari_hashtag_kategori(user_message)
     if hashtag_kategori:
-        hasil["category"] = hashtag_kategori
+        for item in hasil:
+            item["category"] = hashtag_kategori
 
     return hasil
 
@@ -96,6 +97,7 @@ Data tugas SAAT INI:
 - due_at: {current_task['due_at']}
 - priority: {current_task['priority']}
 - category: {current_task.get('category', 'Umum')}
+- pending_date (tanggal yang sempat disebut tapi belum resmi jadi due_at): {current_task.get('pending_date') or 'tidak ada'}
 
 Instruksi perubahan: "{instruksi}"
 

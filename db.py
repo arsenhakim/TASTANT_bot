@@ -34,6 +34,7 @@ def init_db():
             category TEXT DEFAULT 'Umum',
             status TEXT DEFAULT 'pending',
             reminded INTEGER DEFAULT 0,
+            pending_date TEXT,
             created_at TEXT NOT NULL
         )
     """)
@@ -41,12 +42,12 @@ def init_db():
     conn.close()
 
 
-def add_task(chat_id, description, due_at, priority, category="Umum") -> int:
+def add_task(chat_id, description, due_at, priority, category="Umum", pending_date=None) -> int:
     with get_conn() as conn:
         cursor = conn.execute(
-            "INSERT INTO tasks (chat_id, description, due_at, priority, category, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (chat_id, description, due_at, priority, category, now_wib().isoformat())
+            "INSERT INTO tasks (chat_id, description, due_at, priority, category, pending_date, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (chat_id, description, due_at, priority, category, pending_date, now_wib().isoformat())
         )
         conn.commit()
         return cursor.lastrowid
@@ -161,3 +162,8 @@ def list_pending_tasks_by_category(chat_id: int, category: str):
             (chat_id, category)
         ).fetchall()
         return [dict(r) for r in rows]
+
+def clear_pending_date(task_id: int, chat_id: int):
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET pending_date = NULL WHERE id = ? AND chat_id = ?", (task_id, chat_id))
+        conn.commit()

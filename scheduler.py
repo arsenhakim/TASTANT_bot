@@ -10,6 +10,7 @@ from reminder_ui import build_single_keyboard, build_grouped_message
 async def cek_reminder(app: Application):
     now_iso = now_wib().isoformat()
     tasks_jatuh_tempo = db.get_due_unreminded_tasks(now_iso)
+    print(f"[SCHEDULER CHECK] now={now_iso} | ditemukan {len(tasks_jatuh_tempo)} task jatuh tempo: {[(t['id'], t['due_at']) for t in tasks_jatuh_tempo]}")
     if not tasks_jatuh_tempo:
         return
 
