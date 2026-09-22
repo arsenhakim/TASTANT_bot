@@ -157,7 +157,7 @@ def get_task(task_id: int, chat_id: int):
 def list_pending_tasks_by_category(chat_id: int, category: str):
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM tasks WHERE chat_id = ? AND status = 'pending' AND category = ? "
+            "SELECT * FROM tasks WHERE chat_id = ? AND status = 'pending' AND LOWER(category) = LOWER(?) "
             "ORDER BY CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at ASC",
             (chat_id, category)
         ).fetchall()

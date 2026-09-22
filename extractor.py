@@ -101,8 +101,12 @@ Data tugas SAAT INI:
 
 Instruksi perubahan: "{instruksi}"
 
-Tentukan nilai BARU. Field yang tidak disinggung, kembalikan nilai LAMA apa adanya. Waktu relatif
-(seperti "besok", "minggu depan") dihitung dari due_at SAAT INI, bukan dari waktu sekarang.
+Tentukan nilai BARU. Field yang tidak disinggung, kembalikan nilai LAMA apa adanya.
+
+Untuk waktu relatif (seperti "besok", "minggu depan"), hitung dari ANCHOR dengan urutan prioritas:
+1. Jika due_at SAAT INI terisi, pakai itu sebagai anchor.
+2. Jika due_at SAAT INI kosong TAPI pending_date SAAT INI terisi, pakai pending_date sebagai anchor.
+3. Jika keduanya kosong, pakai waktu sekarang sebagai anchor.
 
 WAJIB isi due_at null HANYA jika instruksi secara eksplisit menghapus waktu (misal "hapus waktunya",
 "jadi tanpa deadline") — jika instruksi tidak menyinggung waktu sama sekali, kembalikan due_at LAMA
