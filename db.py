@@ -3,7 +3,8 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from timeutils import now_wib
 
-DB_PATH = "tasks.db"
+import os
+DB_PATH = os.path.join(os.environ.get("DB_DIR", "."), "tasks.db")
 
 
 @contextmanager
